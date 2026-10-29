@@ -338,7 +338,8 @@ public class Colony {
             return;
         }
 
-        // ASSIGNED -> IN_PROGRESS; every assigned agent reacts in its own way
+        // REPAIRED PART: ASSIGNED -> IN_PROGRESS, then every assigned agent
+        // reacts in its own way (the rover moves to the surface)
         if (activeMission.getState() == MissionStatus.ASSIGNED) {
             activeMission.startMission();
             for (Agent a : activeMission.getAssignedAgents()) {
