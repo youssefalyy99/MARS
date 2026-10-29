@@ -10,29 +10,34 @@ public class Exploration extends Mission {
     private final List<EquipmentType> requiredEquipment;
 
     public Exploration(int id, String name, int duration,
-                       Resources resourceRequest,
-                       List<Facility> targetFacilities,
-                       int minBattery,
-                       String region,
-                       List<EquipmentType> requiredEquipment) {
+            Resources resourceRequest,
+            List<Facility> targetFacilities,
+            int minBattery,
+            String region,
+            List<EquipmentType> requiredEquipment) {
 
         super(id, name, MissionType.EXPLORATION, duration,
-              resourceRequest, targetFacilities, minBattery);
+                resourceRequest, targetFacilities, minBattery);
 
         if (region == null || region.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                "Region cannot be empty."
+                    "Region cannot be empty."
             );
         }
 
         if (requiredEquipment == null) {
             throw new IllegalArgumentException(
-                "Required equipment list cannot be null."
+                    "Required equipment list cannot be null."
             );
         }
 
         this.region = region;
         this.requiredEquipment = new ArrayList<>(requiredEquipment);
+    }
+
+    @Override
+    public String getStartBlockedReason() {
+        return "Surface operations are not allowed during a dust storm.";
     }
 
     public String getRegion() {
@@ -75,7 +80,7 @@ public class Exploration extends Mission {
 
         if (!canStartIn(environment)) {
             failMission(
-                "Exploration cannot start during a dust storm."
+                    "Exploration cannot start during a dust storm."
             );
             return false;
         }
@@ -96,21 +101,21 @@ public class Exploration extends Mission {
 
         if (!rover.isReady()) {
             failMission(
-                "The exploration rover is unavailable or unusable."
+                    "The exploration rover is unavailable or unusable."
             );
             return false;
         }
 
         if (rover.getBatteryLevel() < getMinBattery()) {
             failMission(
-                "The rover battery is below the mission minimum."
+                    "The rover battery is below the mission minimum."
             );
             return false;
         }
 
         if (!rover.canPerform(this)) {
             failMission(
-                "The rover lacks sufficient battery or required equipment."
+                    "The rover lacks sufficient battery or required equipment."
             );
             return false;
         }
