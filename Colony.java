@@ -253,8 +253,6 @@ public class Colony {
 
     // ---------- emergencies (spec section 9) ----------
 
-    // Oxygen leak: initial loss, find responders, check everything, then consume and repair.
-    // Not subject to the one-active-mission limit; responders only need to be ready.
     public boolean handleEmergency(Emergency e) {
         if (e == null || !e.isActive()) {
             return false;
@@ -321,8 +319,7 @@ public class Colony {
         return true;
     }
 
-    // unresolved leak: the same oxygen amount is deducted a second time (spec 9.2);
-    // Resources.LeakOxygen never lets the level go below zero. Nothing else is consumed.
+    // unresolved leak: the same oxygen amount is deducted a second time (spec 9.2)
     private boolean failResponse(Emergency e, Habitat habitat, String reason) {
         habitat.applyOxygenLeak(e.getOxygenLoss());
         e.markUnresolved(reason);
@@ -341,8 +338,12 @@ public class Colony {
             return;
         }
 
+        // ASSIGNED -> IN_PROGRESS; every assigned agent reacts in its own way
         if (activeMission.getState() == MissionStatus.ASSIGNED) {
             activeMission.startMission();
+            for (Agent a : activeMission.getAssignedAgents()) {
+                a.onMissionStart(activeMission);
+            }
         }
 
         // environment and agent checks: each agent decides for itself (polymorphism)
