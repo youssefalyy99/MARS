@@ -108,10 +108,7 @@ public class Main {
         System.out.println("Accepted: " + accepted);
         printMission(mission);
 
-        if (accepted) {
-            mission.execute(colony);   // ASSIGNED -> IN_PROGRESS, rover goes to the surface
-        }
-
+        // the colony starts the mission on the first time unit
         for (int t = 1; t <= 3; t++) {
             sim.advanceTime(1);
             System.out.print("Time unit " + t + ": ");
@@ -275,20 +272,19 @@ public class Main {
         team2.add(scientist2);
         team2.add(rover2);
         colony2.submitMission(running, team2);
-        running.execute(colony2);
-        sim2.advanceTime(1);
+        sim2.advanceTime(1);                 // mission starts and progresses
         printMission(running);
 
         colony2.getEnvironment().setCondition(Environment.EnvironmentCondition.DUST_STORM);
         System.out.println("A dust storm begins.");
         sim2.advanceTime(1);
-        printMission(running);   // FAILED, reason mentions the dust storm
+        printMission(running);               // FAILED, reason mentions the dust storm
         System.out.println("Agents released? " + scientist2.isAvailable()
                 + ", " + rover2.isAvailable());
     }
 
     // =====================================================
-    // Extra: Resources class tests (your original tests)
+    // Extra: Resources class tests
     // =====================================================
 
     private static void runResourceTests() {
@@ -354,7 +350,7 @@ public class Main {
     }
 
     // =====================================================
-    // Extra: CrewMember tests (your original tests)
+    // Extra: CrewMember tests
     // =====================================================
 
     private static void runCrewTests() {
