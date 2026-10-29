@@ -10,7 +10,7 @@ public class Engineer extends CrewMember {
 
     @Override
     public boolean canHandle(Emergency e) {
-        return false;
+        return e != null && e.getType() == EmergencyType.OXYGEN_LEAK;
     }
 
     @Override
