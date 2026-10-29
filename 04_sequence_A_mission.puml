@@ -1,0 +1,90 @@
+@startuml
+title Sequence A - Mission Submission and Execution
+skinparam shadowing false
+autonumber
+
+actor "Colony Operator" as op
+participant "sim : Simulation" as sim
+participant "colony : Colony" as colony
+participant "mission : Mission" as mission
+participant "agent : Agent" as agent
+participant "env : Environment" as env
+
+== Submission ==
+op -> colony : submitMission(mission, team)
+colony -> mission : getState()
+mission --> colony : PENDING
+colony -> colony : addMissionToHistory(mission)
+
+alt another mission is active
+  colony -> mission : failMission("Another mission is currently active.")
+  mission --> colony : state = FAILED
+  colony --> op : false (never active)
+else no active mission
+  colony -> mission : canStartIn(env)
+  mission -> env : isDustStorm() / isCommunicationDisrupted()
+  env --> mission : result
+  mission --> colony : allowed?
+  alt environment blocks start
+    colony -> mission : failMission(getStartBlockedReason())
+    colony --> op : false (never active)
+  else allowed
+    loop each agent in team
+      colony -> agent : canOperateIn(env)
+      agent --> colony : boolean
+    end
+    colony -> colony : checkResources(request)\n(colony-wide totals)
+    alt resources insufficient
+      colony -> mission : failMission("Insufficient ...")
+      colony --> op : false (nothing consumed)
+    else resources sufficient
+      colony -> mission : assignAgents(team)
+      loop each agent (checked before any is assigned)
+        mission -> agent : isReady()
+        mission -> agent : canPerform(mission)
+      end
+      alt agent not ready or lacks capability
+        mission -> mission : failMission(reason)
+        mission --> colony : false
+        colony --> op : false (never active)
+      else all agents capable
+        mission -> agent : setAvailability(false)
+        mission -> mission : state = ASSIGNED
+        mission --> colony : true
+        colony -> colony : consumeResources(request)
+        colony -> colony : activeMission = mission
+        colony --> op : true
+      end
+    end
+  end
+end
+
+== Execution (one call per time unit) ==
+op -> sim : advanceTime(1)
+sim -> colony : advanceTime()
+colony -> agent : update() for every agent\n(battery drain / fatigue)
+opt state == ASSIGNED
+  colony -> mission : startMission()
+  mission --> colony : state = IN_PROGRESS
+  colony -> agent : onMissionStart(mission)
+end
+loop each assigned agent
+  colony -> agent : canOperateIn(env)
+  colony -> agent : isUsable()
+end
+alt an agent cannot operate or is unusable
+  colony -> mission : failMission(reason)
+  mission -> agent : setAvailability(true) (release)
+  mission --> colony : state = FAILED
+  colony -> colony : activeMission = null
+else all fine
+  colony -> mission : advanceTime()
+  mission -> mission : progress++
+  alt progress >= duration
+    mission -> mission : complete()
+    mission -> agent : setAvailability(true) (release)
+    mission --> colony : state = COMPLETED
+    colony -> colony : activeMission = null
+  end
+end
+@enduml

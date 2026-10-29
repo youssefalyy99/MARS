@@ -1,0 +1,34 @@
+@startuml
+title MARS-OPS Mission Lifecycle (class Mission, enum MissionStatus)
+skinparam shadowing false
+
+[*] --> PENDING : new Mission(...)
+
+PENDING --> ASSIGNED : submitMission() accepted\n[no other active mission\nand environment allows start\nand every agent isReady() and canPerform()\nand colony resources sufficient]\n/ agents.setAvailability(false), resources consumed
+
+PENDING --> FAILED : submitMission() rejected\n/ failMission(reason)\n(another mission active, environment blocks start,\nagent missing or not registered, agent cannot operate,\nresources insufficient, agent not ready,\nagent lacks capability)\nnever becomes active
+
+ASSIGNED --> IN_PROGRESS : first time unit\nColony.advanceTime()\n/ startMission(), onMissionStart() on every agent
+
+ASSIGNED --> FAILED : failMission(reason)
+
+IN_PROGRESS --> IN_PROGRESS : advanceTime()\n[progress + 1 < duration]\n/ progress++
+
+IN_PROGRESS --> COMPLETED : advanceTime()\n[progress >= duration]\n/ complete(), releaseAgents()
+
+IN_PROGRESS --> FAILED : failMission(reason)\n[agent cannot operate in environment\n(dust storm, communication disruption)\nor agent not usable (battery 0, damage)]\n/ releaseAgents()
+
+COMPLETED --> [*]
+FAILED --> [*]
+
+note right of FAILED
+  Failed missions are never retried.
+  A new Mission object must be created.
+end note
+
+note left of PENDING
+  PENDING is the extra initial state.
+  It guarantees a rejected mission
+  never passes through ASSIGNED.
+end note
+@enduml

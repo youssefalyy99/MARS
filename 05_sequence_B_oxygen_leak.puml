@@ -1,0 +1,69 @@
+@startuml
+title Sequence B - Oxygen Leak Emergency
+skinparam shadowing false
+autonumber
+
+actor "Emergency Operator" as op
+participant "colony : Colony" as colony
+participant "leak : Emergency" as em
+participant "habitat : Habitat" as hab
+participant "agent : Agent" as agent
+participant "robot : Robot" as robot
+
+op -> colony : handleEmergency(leak)
+colony -> em : isActive()
+em --> colony : true
+
+== Identify habitat and deduct initial loss ==
+colony -> em : getAffectedFacility()
+em --> colony : habitat
+colony -> hab : applyOxygenLeak(oxygenLoss)
+hab -> hab : R1.LeakOxygen(amount)\n(never below zero)
+
+== Identify responders ==
+loop each agent in colony
+  colony -> agent : isReady()
+  colony -> agent : canHandle(leak)
+  agent --> colony : boolean
+end
+
+== Check everything BEFORE consuming ==
+alt no human responder
+  colony -> hab : applyOxygenLeak(oxygenLoss)\n(second deduction)
+  colony -> em : markUnresolved("No available human responder...")
+  colony --> op : false (no resources consumed)
+else no robotic responder
+  colony -> hab : applyOxygenLeak(oxygenLoss)\n(second deduction)
+  colony -> em : markUnresolved("No available robotic responder...")
+  colony --> op : false (no resources consumed)
+else robot battery too low
+  colony -> robot : hasEnoughBattery(5)
+  robot --> colony : false
+  colony -> hab : applyOxygenLeak(oxygenLoss)
+  colony -> em : markUnresolved("insufficient battery")
+  colony --> op : false
+else spare parts insufficient
+  colony -> colony : getColonyTotal("SPARE_PARTS")
+  colony -> hab : applyOxygenLeak(oxygenLoss)
+  colony -> em : markUnresolved("Insufficient spare parts...")
+  colony --> op : false
+else responders and resources available
+  == Dispatch and repair ==
+  colony -> em : dispatch(human, robot)
+  loop each responder
+    em -> agent : isReady() / canHandle(leak)
+    em -> agent : setAvailability(false)
+    em -> agent : setCurrentLocation(habitat name)
+  end
+  em --> colony : true
+  colony -> robot : drainBattery(5)
+  colony -> colony : consumeResources(2 spare parts)\n(all-or-nothing)
+  colony -> hab : sealLeak()
+  hab -> hab : leaking = false, status = OPERATIONAL
+  == Update states and release ==
+  colony -> em : resolve()
+  em -> em : status = RESOLVED
+  em -> agent : setAvailability(true) (release responders)
+  colony --> op : true
+end
+@enduml

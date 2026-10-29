@@ -1,0 +1,46 @@
+@startuml
+title Sequence C - Environmental Restriction (dust storm blocks exploration)
+skinparam shadowing false
+autonumber
+
+actor "Colony Operator" as op
+participant "colony : Colony" as colony
+participant "env : Environment" as env
+participant "mission : Exploration" as mission
+
+op -> colony : getEnvironment()
+colony --> op : env
+op -> env : setCondition(DUST_STORM)
+
+op -> colony : submitMission(mission, team)
+colony -> mission : getState()
+mission --> colony : PENDING
+
+== Environmental check ==
+colony -> mission : canStartIn(env)
+mission -> env : isDustStorm()
+env --> mission : true
+mission --> colony : false
+
+== Rejection ==
+colony -> mission : getStartBlockedReason()
+mission --> colony : "Surface operations are not allowed\nduring a dust storm."
+colony -> mission : failMission(reason)
+mission -> mission : state = FAILED\nfailureReason = reason
+note right of mission
+  Agents were never assigned.
+  The mission never becomes active.
+  Nothing was consumed.
+end note
+colony --> op : false
+
+op -> mission : getFailureReason()
+mission --> op : "Surface operations are not allowed during a dust storm."
+
+== Storm during an active mission ==
+note over colony, mission
+  Colony.advanceTime() asks each assigned agent canOperateIn(env).
+  A rover answers false in a dust storm, so failMission(reason) is called,
+  the agents are released, and activeMission becomes null.
+end note
+@enduml

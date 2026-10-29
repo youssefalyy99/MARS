@@ -1,0 +1,112 @@
+@startuml
+title MARS-OPS Object Diagram - snapshot right after Scenario 1 mission is accepted (ASSIGNED)
+skinparam shadowing false
+
+object "colony : Colony" as colony {
+  activeMission = mission1
+  environment = env
+}
+
+object "env : Environment" as env {
+  condition = NORMAL
+}
+
+object "scientist1 : Scientist" as scientist1 {
+  id = 1
+  Name = "Dr. Amal"
+  skills = [EXPLORATION]
+  healthStatus = 100
+  fatigueLevel = 10
+  availability = false
+  currentLocation = "Habitat A"
+}
+
+object "rover1 : ExplorationRover" as rover1 {
+  id = 101
+  Name = "Rover-1"
+  batteryLevel = 100
+  healthStatus = OPERATIONAL
+  carryCapacity = 3
+  availability = false
+  currentLocation = "Habitat A"
+}
+
+object "spectrometer : Equipment" as spectro {
+  id = 1
+  name = "Spectrometer"
+  type = SCIENTIFIC
+  condition = WORKING
+}
+
+object "habitatA : Habitat" as habitat {
+  id = "H1"
+  name = "Habitat A"
+  status = "OPERATIONAL"
+  leaking = false
+}
+object "habitatStock : Resources" as hres {
+  oxygen = 300.0
+  water = 100.0
+  food = 100.0
+}
+
+object "lab : Laboratory" as lab {
+  id = "L1"
+  status = "OPERATIONAL"
+  onFire = false
+}
+object "labStock : Resources" as lres {
+  spareParts = 10.0
+}
+
+object "power : PowerStation" as power {
+  id = "P1"
+  status = "OPERATIONAL"
+}
+object "powerStock : Resources" as pres {
+  fuel = 90.0
+  power = 200.0
+}
+
+object "comms : CommunicationStation" as comms {
+  id = "C1"
+  linkActive = true
+}
+
+object "mission1 : Exploration" as mission1 {
+  id = 1
+  name = "Explore Region Alpha"
+  type = EXPLORATION
+  state = ASSIGNED
+  progress = 0
+  duration = 3
+  minBattery = 15
+  region = "Region Alpha"
+  requiredEquipment = [SCIENTIFIC]
+}
+
+object "request : Resources" as request {
+  RequestRec = {FUEL=10.0}
+}
+
+object "sim : Simulation" as sim
+
+' links match the class diagram
+sim --> colony
+colony *-- env
+colony o-- scientist1 : agents
+colony o-- rover1 : agents
+colony o-- habitat : facilities
+colony o-- lab : facilities
+colony o-- power : facilities
+colony o-- comms : facilities
+colony o-- mission1 : missionHistory
+colony --> mission1 : activeMission
+rover1 o-- spectro : equipment
+habitat *-- hres : R1
+lab *-- lres : R1
+power *-- pres : R1
+mission1 --> scientist1 : assignedAgents
+mission1 --> rover1 : assignedAgents
+mission1 --> request : resourceRequest
+@enduml
