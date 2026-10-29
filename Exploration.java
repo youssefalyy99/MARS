@@ -99,7 +99,7 @@ public class Exploration extends Mission {
             return false;
         }
 
-        if (!rover.isReady()) {
+        if (!rover.isUsable()) {
             failMission(
                     "The exploration rover is unavailable or unusable."
             );
