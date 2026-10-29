@@ -52,6 +52,10 @@ public abstract class Agent {
         return availability && isUsable();
     }
 
+    public boolean canOperateIn(Environment env) {
+    return true;
+}
+    
     public abstract String getStatusSummary();
 
     public abstract void update();
