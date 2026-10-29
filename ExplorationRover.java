@@ -21,7 +21,7 @@ public class ExplorationRover extends Robot {
     }
 
     public List<Equipment> getEquipment() {
-        return new ArrayList<>(equipment);   
+        return new ArrayList<>(equipment);
     }
 
     public boolean loadEquipment(Equipment e) {
@@ -54,15 +54,24 @@ public class ExplorationRover extends Robot {
         return true;
     }
 
+    // a rover on an exploration mission is on the surface (spec 9.1 rule 2)
     public void explore(String region) {
         setCurrentLocation("SURFACE");
         System.out.println(getName() + " is exploring " + region + ".");
     }
 
-    // a broken-down rover stays where it broke down 
+    // a broken-down rover stays where it broke down (spec 9.1 rule 3)
     public void breakDown() {
         damage();
         System.out.println(getName() + " has broken down at " + getCurrentLocation() + ".");
+    }
+
+    // the colony calls this when the mission starts (ASSIGNED -> IN_PROGRESS)
+    @Override
+    public void onMissionStart(Mission m) {
+        if (m != null && m.getType() == MissionType.EXPLORATION) {
+            explore(m.getName());
+        }
     }
 
     @Override
@@ -82,7 +91,7 @@ public class ExplorationRover extends Robot {
 
     @Override
     public boolean canHandle(Emergency e) {
-        return false;   //  rovers do not respond to emergencies
+        return false;   // rovers do not respond to emergencies
     }
 
     @Override
