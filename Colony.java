@@ -7,9 +7,13 @@ import java.util.Map;
 
 public class Colony {
 
+    private static final double RESPONSE_SPARE_PARTS = 2;   // spec example
+    private static final int RESPONSE_BATTERY = 5;          // spec example
+
     private final ArrayList<Agent> agents;
     private final ArrayList<Facility> facilities;
     private final ArrayList<Mission> missionHistory;
+    private final ArrayList<Emergency> emergencyHistory;
 
     private Environment environment;
     private Mission activeMission;
@@ -18,9 +22,12 @@ public class Colony {
         this.agents = new ArrayList<>();
         this.facilities = new ArrayList<>();
         this.missionHistory = new ArrayList<>();
+        this.emergencyHistory = new ArrayList<>();
         this.environment = new Environment();
         this.activeMission = null;
     }
+
+    // ---------- agents ----------
 
     public boolean addAgent(Agent agent) {
         if (agent == null) {
@@ -48,6 +55,8 @@ public class Colony {
         return Collections.unmodifiableList(agents);
     }
 
+    // ---------- facilities ----------
+
     public boolean addFacility(Facility facility) {
         if (facility == null) {
             return false;
@@ -74,6 +83,8 @@ public class Colony {
         return Collections.unmodifiableList(facilities);
     }
 
+    // ---------- environment / state ----------
+
     public Environment getEnvironment() {
         return environment;
     }
@@ -93,8 +104,8 @@ public class Colony {
         return Collections.unmodifiableList(missionHistory);
     }
 
-    private void setActiveMission(Mission activeMission) {
-        this.activeMission = activeMission;
+    public List<Emergency> getEmergencyHistory() {
+        return Collections.unmodifiableList(emergencyHistory);
     }
 
     private boolean addMissionToHistory(Mission mission) {
@@ -105,59 +116,7 @@ public class Colony {
         return true;
     }
 
-    public boolean submitMission(Mission mission, List<Agent> team) {
-        if (mission == null) {
-            return false;
-        }
-
-        if (mission.getState() != MissionStatus.PENDING) {
-            return false;                        
-        }
-
-        addMissionToHistory(mission);                
-
-        if (activeMission != null && activeMission.isActive()) {
-            mission.failMission("Another mission is currently active.");
-            return false;
-        }
-
-        if (!mission.canStartIn(environment)) {
-            mission.failMission(mission.getStartBlockedReason());
-            return false;
-        }
-
-        if (team != null) {
-            for (Agent agent : team) {
-                if (agent == null) {
-                    mission.failMission("A required agent is missing.");
-                    return false;
-                }
-                if (findAgent(agent.getId()) == null) {
-                    mission.failMission("Agent with ID " + agent.getId() + " is not registered in this colony.");
-                    return false;
-                }
-            }
-        }
-
-        if (mission.getResourceRequest() != null) {
-            String shortage = checkResources(mission.getResourceRequest());
-            if (shortage != null) {
-                mission.failMission(shortage);
-                return false;
-            }
-        }
-
-        if (!mission.assignAgents(team)) {
-            return false;
-        }
-
-        if (mission.getResourceRequest() != null) {
-            consumeResources(mission.getResourceRequest());
-        }
-
-        activeMission = mission;
-        return true;
-    }
+    // ---------- resources (colony-level, spec section 5.1) ----------
 
     private double amountIn(Facility f, String type) {
         switch (type) {
@@ -180,7 +139,8 @@ public class Colony {
         }
     }
 
-    private double getColonyTotal(String type) {
+    // sum over operational facilities only; destroyed/unavailable ones do not count
+    public double getColonyTotal(String type) {
         double total = 0;
         for (Facility f : facilities) {
             if (f.isOperational()) {
@@ -190,6 +150,7 @@ public class Colony {
         return total;
     }
 
+    // returns null if everything is available, otherwise the failure reason
     private String checkResources(Resources request) {
         for (Map.Entry<String, Double> entry : request.getRequestRec().entrySet()) {
             double available = getColonyTotal(entry.getKey());
@@ -201,6 +162,8 @@ public class Colony {
         return null;
     }
 
+    // only called after checkResources succeeded; draws facility by facility
+    // in registration order (allocation policy: document this in the README)
     private void consumeResources(Resources request) {
         if (request == null || request.getRequestRec() == null) {
             return;
@@ -210,11 +173,11 @@ public class Colony {
             double needed = entry.getValue();
 
             for (Facility f : facilities) {
-                if (needed <= 0) break;
+                if (needed <= 0) {
+                    break;
+                }
                 if (f.isOperational()) {
-                    double available = amountIn(f, type);
-                    double take = Math.min(available, needed);
-                    
+                    double take = Math.min(amountIn(f, type), needed);
                     if (take > 0) {
                         f.R1.RemoveResources(type, take);
                         needed -= take;
@@ -224,33 +187,197 @@ public class Colony {
         }
     }
 
+    // ---------- missions ----------
+
+    public boolean submitMission(Mission mission, List<Agent> team) {
+        if (mission == null) {
+            return false;
+        }
+
+        if (mission.getState() != MissionStatus.PENDING) {
+            return false;
+        }
+
+        addMissionToHistory(mission);
+
+        if (activeMission != null && activeMission.isActive()) {
+            mission.failMission("Another mission is currently active.");
+            return false;
+        }
+
+        if (!mission.canStartIn(environment)) {
+            mission.failMission(mission.getStartBlockedReason());
+            return false;
+        }
+
+        if (team != null) {
+            for (Agent agent : team) {
+                if (agent == null) {
+                    mission.failMission("A required agent is missing.");
+                    return false;
+                }
+                if (findAgent(agent.getId()) == null) {
+                    mission.failMission("Agent with ID " + agent.getId()
+                            + " is not registered in this colony.");
+                    return false;
+                }
+                if (!agent.canOperateIn(environment)) {
+                    mission.failMission("Agent " + agent.getName()
+                            + " cannot operate under the current environmental conditions.");
+                    return false;
+                }
+            }
+        }
+
+        if (mission.getResourceRequest() != null) {
+            String shortage = checkResources(mission.getResourceRequest());
+            if (shortage != null) {
+                mission.failMission(shortage);
+                return false;
+            }
+        }
+
+        // checks capability and availability of every agent before assigning any
+        if (!mission.assignAgents(team)) {
+            return false;
+        }
+
+        // consume only after everything has been accepted (all-or-nothing)
+        if (mission.getResourceRequest() != null) {
+            consumeResources(mission.getResourceRequest());
+        }
+
+        activeMission = mission;
+        return true;
+    }
+
+    // ---------- emergencies (spec section 9) ----------
+
+    // Oxygen leak: initial loss, find responders, check everything, then consume and repair.
+    // Not subject to the one-active-mission limit; responders only need to be ready.
+    public boolean handleEmergency(Emergency e) {
+        if (e == null || !e.isActive()) {
+            return false;
+        }
+        emergencyHistory.add(e);
+
+        if (e.getType() != EmergencyType.OXYGEN_LEAK
+                || !(e.getAffectedFacility() instanceof Habitat)) {
+            e.markUnresolved("No response procedure implemented for " + e.getType() + ".");
+            return false;
+        }
+
+        Habitat habitat = (Habitat) e.getAffectedFacility();
+        habitat.applyOxygenLeak(e.getOxygenLoss());          // initial loss (spec 9.2)
+
+        // ask each agent whether it can handle the emergency; one human, one robot
+        CrewMember human = null;
+        Robot robot = null;
+        for (Agent a : agents) {
+            if (!a.isReady() || !a.canHandle(e)) {
+                continue;
+            }
+            if (a instanceof Robot) {
+                if (robot == null) {
+                    robot = (Robot) a;
+                }
+            } else if (a instanceof CrewMember) {
+                if (human == null) {
+                    human = (CrewMember) a;
+                }
+            }
+        }
+
+        // check everything BEFORE consuming anything
+        String problem = null;
+        if (human == null) {
+            problem = "No available human responder able to handle " + e.getType() + ".";
+        } else if (robot == null) {
+            problem = "No available robotic responder able to handle " + e.getType() + ".";
+        } else if (!robot.hasEnoughBattery(RESPONSE_BATTERY)) {
+            problem = "Robot " + robot.getName() + " has insufficient battery.";
+        } else if (getColonyTotal("SPARE_PARTS") < RESPONSE_SPARE_PARTS) {
+            problem = "Insufficient spare parts: required " + RESPONSE_SPARE_PARTS
+                    + ", available " + getColonyTotal("SPARE_PARTS") + ".";
+        }
+        if (problem != null) {
+            return failResponse(e, habitat, problem);
+        }
+
+        List<Agent> team = new ArrayList<>();
+        team.add(human);
+        team.add(robot);
+        if (!e.dispatch(team)) {
+            return failResponse(e, habitat, "Dispatch failed.");
+        }
+
+        robot.drainBattery(RESPONSE_BATTERY);
+        Resources cost = new Resources();
+        cost.AddRequirement("SPARE_PARTS", RESPONSE_SPARE_PARTS);
+        consumeResources(cost);
+
+        habitat.sealLeak();
+        e.resolve();                                         // also releases responders
+        return true;
+    }
+
+    // unresolved leak: the same oxygen amount is deducted a second time (spec 9.2);
+    // Resources.LeakOxygen never lets the level go below zero. Nothing else is consumed.
+    private boolean failResponse(Emergency e, Habitat habitat, String reason) {
+        habitat.applyOxygenLeak(e.getOxygenLoss());
+        e.markUnresolved(reason);
+        return false;
+    }
+
+    // ---------- simulation ----------
+
     public void advanceTime() {
         for (Agent agent : agents) {
             agent.update();
         }
 
-        if (activeMission != null && activeMission.isActive()) {
-            if (activeMission.getState() == MissionStatus.ASSIGNED) {
-                activeMission.startMission();
+        if (activeMission == null || !activeMission.isActive()) {
+            activeMission = null;
+            return;
+        }
+
+        if (activeMission.getState() == MissionStatus.ASSIGNED) {
+            activeMission.startMission();
+        }
+
+        // environment and agent checks: each agent decides for itself (polymorphism)
+        for (Agent agent : activeMission.getAssignedAgents()) {
+            if (!agent.canOperateIn(environment)) {
+                activeMission.failMission(environmentFailureReason(agent));
+                break;
             }
-
-            if (environment.isDustStorm()) {
-                activeMission.failMission("Surface operations are not allowed during a dust storm");
-            } else if (environment.isCommunicationDisrupted()) {
-                activeMission.failMission("Communication disruption aborted the mission.");
-            }
-
-            if (activeMission.isActive()) {
-                activeMission.advanceTime();
-
-                if (activeMission.isFinished()) {
-                    activeMission = null;
-                }
-            } else {
-                activeMission = null;
+            if (!agent.isUsable()) {
+                activeMission.failMission("Agent " + agent.getName()
+                        + " is no longer usable (low battery, damage, or exhaustion).");
+                break;
             }
         }
+
+        if (activeMission.isActive()) {
+            activeMission.advanceTime();
+        }
+
+        if (activeMission.isFinished()) {
+            activeMission = null;
+        }
     }
+
+    private String environmentFailureReason(Agent agent) {
+        if (environment.isDustStorm()) {
+            return "Surface operations are not allowed during a dust storm.";
+        }
+        if (environment.isCommunicationDisrupted()) {
+            return "Communication disruption aborted the mission (" + agent.getName() + ").";
+        }
+        return "Agent " + agent.getName() + " cannot operate in the current environment.";
+    }
+
+    // ---------- report ----------
 
     public String getStatusReport() {
         StringBuilder sb = new StringBuilder();
@@ -258,7 +385,8 @@ public class Colony {
         sb.append("Environment: ").append(environment.getDescription()).append("\n\n");
 
         sb.append("--- Colony-Wide Resource Totals ---\n");
-        String[] resourceTypes = {"OXYGEN", "WATER", "FOOD", "FUEL", "POWER", "MEDICAL_SUPPLIES", "SPARE_PARTS"};
+        String[] resourceTypes = {"OXYGEN", "WATER", "FOOD", "FUEL", "POWER",
+            "MEDICAL_SUPPLIES", "SPARE_PARTS"};
         for (String type : resourceTypes) {
             sb.append(type).append(": ").append(getColonyTotal(type)).append("\n");
         }
@@ -280,7 +408,8 @@ public class Colony {
         } else {
             for (Facility facility : facilities) {
                 sb.append("Facility ID: ").append(facility.getId())
-                  .append(" | Status: ").append(facility.status).append("\n");
+                        .append(" | Name: ").append(facility.getName())
+                        .append(" | Status: ").append(facility.getStatus()).append("\n");
             }
         }
         sb.append("\n");
@@ -288,10 +417,10 @@ public class Colony {
         sb.append("--- Active Mission ---\n");
         if (activeMission != null) {
             sb.append("Mission ID: ").append(activeMission.getId())
-              .append(" | Name: ").append(activeMission.getName())
-              .append(" | State: ").append(activeMission.getState())
-              .append(" | Progress: ").append(activeMission.getProgress())
-              .append("/").append(activeMission.getDuration()).append("\n");
+                    .append(" | Name: ").append(activeMission.getName())
+                    .append(" | State: ").append(activeMission.getState())
+                    .append(" | Progress: ").append(activeMission.getProgress())
+                    .append("/").append(activeMission.getDuration()).append("\n");
         } else {
             sb.append("No active mission.\n");
         }
@@ -303,12 +432,22 @@ public class Colony {
         } else {
             for (Mission mission : missionHistory) {
                 sb.append("Mission ID: ").append(mission.getId())
-                  .append(" | Name: ").append(mission.getName())
-                  .append(" | State: ").append(mission.getState());
+                        .append(" | Name: ").append(mission.getName())
+                        .append(" | State: ").append(mission.getState());
                 if (mission.getFailureReason() != null) {
                     sb.append(" | Reason: ").append(mission.getFailureReason());
                 }
                 sb.append("\n");
+            }
+        }
+        sb.append("\n");
+
+        sb.append("--- Emergency History & Outcomes ---\n");
+        if (emergencyHistory.isEmpty()) {
+            sb.append("No emergencies recorded.\n");
+        } else {
+            for (Emergency em : emergencyHistory) {
+                sb.append(em.getStatusSummary()).append("\n");
             }
         }
 
