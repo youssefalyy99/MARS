@@ -52,10 +52,16 @@ public abstract class Agent {
         return availability && isUsable();
     }
 
+    // humans work in any environment by default; robots override this
     public boolean canOperateIn(Environment env) {
-    return true;
-}
-    
+        return true;
+    }
+
+    // called by the colony when a mission this agent belongs to starts;
+    // by default nothing happens, subclasses react in their own way
+    public void onMissionStart(Mission m) {
+    }
+
     public abstract String getStatusSummary();
 
     public abstract void update();
