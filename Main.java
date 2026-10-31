@@ -14,6 +14,8 @@ public class Main {
         scenario4EmergencyHandling();
         scenario5EnvironmentalEffect();
 
+        scenario6Research();
+
         // ---- extra unit-style checks ----
         runResourceTests();
         runCrewTests();
@@ -281,6 +283,76 @@ public class Main {
         printMission(running);               // FAILED, reason mentions the dust storm
         System.out.println("Agents released? " + scientist2.isAvailable()
                 + ", " + rover2.isAvailable());
+    }
+
+    // =====================================================
+    // Scenario 6 (extra): Research mission
+    // =====================================================
+
+    private static Research newResearch(int id, Facility lab) {
+        Resources request = new Resources();
+        request.AddRequirement("WATER", 5);
+        List<Facility> targets = new ArrayList<>();
+        targets.add(lab);
+        List<String> labEquipment = new ArrayList<>();
+        labEquipment.add("Microscope");
+        // (id, name, duration, resources, targets, experimentName, labEquipment)
+        return new Research(id, "Cell Study", 2, request, targets,
+                "Cell Growth Experiment", labEquipment);
+    }
+
+    private static void scenario6Research() {
+        title("SCENARIO 6 (extra): Research Mission");
+
+        // 6a: everything available, the research completes
+        System.out.println("--- 6a: successful research ---");
+        Colony colony = buildColony();
+        Simulation sim = new Simulation(colony);
+        Laboratory lab = (Laboratory) colony.findFacility("L1");
+        lab.addEquipment("Microscope");
+
+        Scientist scientist = new Scientist(skills("RESEARCH"), 10, 100,
+                "Dr. Layla", 20, true, "Laboratory");
+        colony.addAgent(scientist);
+
+        Research research = newResearch(7, lab);
+        System.out.println("Water before: " + colony.getColonyTotal("WATER"));
+
+        List<Agent> team = new ArrayList<>();
+        team.add(scientist);
+        boolean accepted = colony.submitMission(research, team);
+        System.out.println("Accepted: " + accepted);
+        printMission(research);
+
+        for (int t = 1; t <= 2; t++) {
+            sim.advanceTime(1);
+            System.out.print("Time unit " + t + ": ");
+            printMission(research);
+        }
+        System.out.println("Water after:  " + colony.getColonyTotal("WATER"));   // 95
+        System.out.println("Scientist available again? " + scientist.isAvailable());
+
+        // 6b: the laboratory is on fire, so the research cannot start
+        System.out.println();
+        System.out.println("--- 6b: laboratory on fire ---");
+        Colony colony2 = buildColony();
+        Laboratory lab2 = (Laboratory) colony2.findFacility("L1");
+        lab2.addEquipment("Microscope");
+        Scientist scientist2 = new Scientist(skills("RESEARCH"), 10, 100,
+                "Dr. Layla", 21, true, "Laboratory");
+        colony2.addAgent(scientist2);
+
+        lab2.catchFire();   // laboratory unavailable, equipment damaged
+
+        Research blocked = newResearch(8, lab2);
+        List<Agent> team2 = new ArrayList<>();
+        team2.add(scientist2);
+        colony2.submitMission(blocked, team2);
+
+        System.out.println("Research Mission cannot start.");
+        System.out.println("Reason: " + blocked.getFailureReason());
+        printMission(blocked);
+        System.out.println("Scientist still available? " + scientist2.isAvailable());   // true
     }
 
     // =====================================================
